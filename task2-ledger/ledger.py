@@ -2,7 +2,7 @@
 
 运行:  python ledger.py
 数据:  保存在脚本同目录下的 data.json，重启后自动加载。
-后续:  流水查看、汇总统计暂未实现。
+后续:  汇总统计暂未实现。
 """
 
 from __future__ import annotations
@@ -85,6 +85,27 @@ def add_record(records: list[dict]) -> None:
     print(summary + f"（当前共 {len(records)} 笔）")
 
 
+def show_records(records: list[dict]) -> None:
+    print("--- 查看流水 ---")
+    if not records:
+        print("还没有账目，先去记一笔吧")
+        return
+    keyword = input("按分类筛选（直接回车显示全部）: ").strip()
+    shown = [r for r in records if not keyword or r["category"] == keyword]
+    if not shown:
+        print(f"没有分类为「{keyword}」的账目。")
+        return
+    print(f"共 {len(shown)} 笔：")
+    for number, record in enumerate(shown, start=1):
+        # 当前版本只能记支出（无 type 字段一律视为支出），将来支持收入时补 type="income" 即显示 +
+        sign = "+" if record.get("type") == "income" else "-"
+        note = f" {record['note']}" if record["note"] else ""
+        print(
+            f"{number}. {record['time']}  {sign}{record['amount']:.2f} 元"
+            f"  [{record['category']}]{note}"
+        )
+
+
 def main() -> None:
     records = load_records()
     print(f"账本已加载，当前共 {len(records)} 笔。")
@@ -92,15 +113,18 @@ def main() -> None:
         print()
         print("==== 记账本 ====")
         print("1 记一笔")
-        print("2 退出")
+        print("2 查看流水")
+        print("3 退出")
         choice = input("请选择: ").strip()
         if choice == "1":
             add_record(records)
         elif choice == "2":
+            show_records(records)
+        elif choice == "3":
             print("再见！数据已保存在 data.json。")
             break
         else:
-            print(f"没有这个选项：{choice}，请输入 1 或 2。")
+            print(f"没有这个选项：{choice}，请输入 1、2 或 3。")
 
 
 if __name__ == "__main__":
