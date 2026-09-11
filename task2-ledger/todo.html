@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>待办台账 · Todo Ledger</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #2b2f36;
+    --text-light: #8a919c;
+    --accent: #4f6ef7;
+    --accent-dark: #3d58d6;
+    --danger: #e5484d;
+    --success: #30a46c;
+    --border: #e6e8eb;
+    --done-bg: #f6f8f5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #eef1f8 0%, var(--bg) 45%);
+    min-height: 100vh;
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 48px 16px;
+  }
+  .app { width: 100%; max-width: 640px; }
+
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+  header p { color: var(--text-light); margin-top: 6px; font-size: 14px; }
+
+  /* 输入区 */
+  .input-row {
+    display: flex; gap: 10px; margin-bottom: 18px;
+    background: var(--card); padding: 14px; border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(30, 40, 80, 0.06);
+  }
+  .input-row input {
+    flex: 1; border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 11px 14px; font-size: 15px; outline: none; transition: border-color .15s;
+  }
+  .input-row input:focus { border-color: var(--accent); }
+  .input-row button {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 0 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+  }
+  .input-row button:hover { background: var(--accent-dark); }
+
+  /* 筛选条 */
+  .toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; padding: 0 4px; font-size: 14px;
+  }
+  .filters { display: flex; gap: 6px; }
+  .filters button {
+    border: none; background: transparent; color: var(--text-light);
+    padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  .filters button.active { background: var(--card); color: var(--accent); font-weight: 600; box-shadow: 0 1px 6px rgba(30,40,80,.08); }
+  .filters button:not(.active):hover { color: var(--text); }
+  .stats { color: var(--text-light); }
+
+  /* 列表 */
+  ul.list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  li.item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 2px 10px rgba(30, 40, 80, 0.05);
+    animation: slideIn .18s ease-out;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  li.item.done { background: var(--done-bg); }
+  li.item.done .text { color: var(--text-light); text-decoration: line-through; }
+
+  .check {
+    width: 22px; height: 22px; border: 2px solid #c6ccd6; border-radius: 50%;
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    transition: all .15s; background: transparent;
+  }
+  .check:hover { border-color: var(--success); }
+  .item.done .check { background: var(--success); border-color: var(--success); }
+  .item.done .check::after {
+    content: ""; width: 6px; height: 10px;
+    border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .text { flex: 1; font-size: 15px; line-height: 1.5; word-break: break-all; cursor: pointer; }
+  .text input {
+    width: 100%; border: 1.5px solid var(--accent); border-radius: 8px;
+    padding: 6px 10px; font-size: 15px; outline: none; font-family: inherit;
+  }
+  .date { font-size: 12px; color: var(--text-light); margin-right: 4px; white-space: nowrap; }
+  .op {
+    border: none; background: transparent; cursor: pointer; font-size: 15px;
+    color: var(--text-light); padding: 4px 6px; border-radius: 6px; transition: all .12s;
+  }
+  .op:hover { color: var(--text); background: #eef0f3; }
+  .op.del:hover { color: var(--danger); background: #fdeeee; }
+
+  /* 底部 */
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 16px; font-size: 13px; color: var(--text-light); padding: 0 4px;
+  }
+  .footer button {
+    border: none; background: transparent; color: var(--text-light);
+    cursor: pointer; font-size: 13px; text-decoration: underline;
+  }
+  .footer button:hover { color: var(--danger); }
+
+  .empty {
+    text-align: center; padding: 56px 0; color: var(--text-light);
+    background: var(--card); border-radius: 12px; border: 1.5px dashed var(--border);
+  }
+  .empty .icon { font-size: 36px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>📋 待办台账</h1>
+    <p id="today"></p>
+  </header>
+
+  <div class="input-row">
+    <input id="newTodo" type="text" placeholder="记一笔要做的事,回车或点添加…" maxlength="100" autocomplete="off">
+    <button id="addBtn">添加</button>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters">
+      <button data-filter="all" class="active">全部</button>
+      <button data-filter="active">进行中</button>
+      <button data-filter="done">已完成</button>
+    </div>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <ul class="list" id="list"></ul>
+
+  <div class="footer">
+    <span>数据保存在本浏览器中</span>
+    <button id="clearDone">清除已完成</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "task2-ledger.todos";
+  var listEl = document.getElementById("list");
+  var inputEl = document.getElementById("newTodo");
+  var addBtn = document.getElementById("addBtn");
+  var statsEl = document.getElementById("stats");
+  var clearDoneBtn = document.getElementById("clearDone");
+
+  var todos = load();
+  var filter = "all"; // all | active | done
+  var editingId = null;
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      var data = raw ? JSON.parse(raw) : [];
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function addTodo() {
+    var text = inputEl.value.trim();
+    if (!text) { inputEl.focus(); return; }
+    todos.unshift({ id: uid(), text: text, done: false, createdAt: Date.now() });
+    inputEl.value = "";
+    save();
+    render();
+  }
+
+  function toggle(id) {
+    todos.forEach(function (t) { if (t.id === id) t.done = !t.done; });
+    save();
+    render();
+  }
+
+  function remove(id) {
+    todos = todos.filter(function (t) { return t.id !== id; });
+    if (editingId === id) editingId = null;
+    save();
+    render();
+  }
+
+  function startEdit(id) {
+    editingId = id;
+    render();
+  }
+
+  function commitEdit(id, newText) {
+    var text = newText.trim();
+    editingId = null;
+    if (!text) { remove(id); return; }
+    todos.forEach(function (t) { if (t.id === id) t.text = text; });
+    save();
+    render();
+  }
+
+  function visibleTodos() {
+    if (filter === "active") return todos.filter(function (t) { return !t.done; });
+    if (filter === "done") return todos.filter(function (t) { return t.done; });
+    return todos;
+  }
+
+  function fmtDate(ts) {
+    var d = new Date(ts);
+    var pad = function (n) { return n < 10 ? "0" + n : "" + n; };
+    return (d.getMonth() + 1) + "/" + pad(d.getDate());
+  }
+
+  function render() {
+    var items = visibleTodos();
+    var doneCount = todos.filter(function (t) { return t.done; }).length;
+    statsEl.textContent = "共 " + todos.length + " 项 · 未完成 " + (todos.length - doneCount);
+
+    if (items.length === 0) {
+      listEl.innerHTML = '<li class="empty"><div class="icon">🎉</div>' +
+        (todos.length === 0 ? "还没有待办,添加第一笔吧" : "这个分类下没有事项") + "</li>";
+      return;
+    }
+
+    listEl.innerHTML = "";
+    items.forEach(function (t) {
+      var li = document.createElement("li");
+      li.className = "item" + (t.done ? " done" : "");
+
+      // 勾选按钮
+      var check = document.createElement("button");
+      check.className = "check";
+      check.title = t.done ? "标记为未完成" : "标记为已完成";
+      check.onclick = function () { toggle(t.id); };
+      li.appendChild(check);
+
+      // 文本(查看 / 编辑两种形态)
+      var textWrap = document.createElement("div");
+      textWrap.className = "text";
+      if (editingId === t.id) {
+        var editInput = document.createElement("input");
+        editInput.type = "text";
+        editInput.value = t.text;
+        editInput.maxLength = 100;
+        editInput.onkeydown = function (e) {
+          if (e.key === "Enter") commitEdit(t.id, editInput.value);
+          if (e.key === "Escape") { editingId = null; render(); }
+        };
+        editInput.onblur = function () {
+          if (editingId === t.id) commitEdit(t.id, editInput.value);
+        };
+        textWrap.appendChild(editInput);
+        li.appendChild(textWrap);
+        listEl.appendChild(li);
+        editInput.focus();
+        editInput.setSelectionRange(t.text.length, t.text.length);
+      } else {
+        var span = document.createElement("span");
+        span.textContent = t.text;
+        span.title = "双击编辑";
+        span.ondblclick = function () { startEdit(t.id); };
+        textWrap.appendChild(span);
+        li.appendChild(textWrap);
+
+        var date = document.createElement("span");
+        date.className = "date";
+        date.textContent = fmtDate(t.createdAt);
+        li.appendChild(date);
+
+        var editBtn = document.createElement("button");
+        editBtn.className = "op";
+        editBtn.title = "编辑";
+        editBtn.textContent = "✏️";
+        editBtn.onclick = function () { startEdit(t.id); };
+        li.appendChild(editBtn);
+      }
+
+      var delBtn = document.createElement("button");
+      delBtn.className = "op del";
+      delBtn.title = "删除";
+      delBtn.textContent = "🗑️";
+      delBtn.onclick = function () { remove(t.id); };
+      li.appendChild(delBtn);
+
+      listEl.appendChild(li);
+    });
+  }
+
+  addBtn.onclick = addTodo;
+  inputEl.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") addTodo();
+  });
+
+  document.querySelectorAll(".filters button").forEach(function (btn) {
+    btn.onclick = function () {
+      filter = btn.dataset.filter;
+      document.querySelectorAll(".filters button").forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+      });
+      render();
+    };
+  });
+
+  clearDoneBtn.onclick = function () {
+    if (todos.length === 0) return;
+    var doneCount = todos.filter(function (t) { return t.done; }).length;
+    if (doneCount === 0) { alert("当前没有已完成的事项"); return; }
+    if (!confirm("确定清除 " + doneCount + " 项已完成的待办吗?")) return;
+    todos = todos.filter(function (t) { return !t.done; });
+    save();
+    render();
+  };
+
+  document.getElementById("today").textContent =
+    "今天是 " + new Date().toLocaleDateString("zh-CN", {
+      year: "numeric", month: "long", day: "numeric", weekday: "long"
+    });
+
+  render();
+})();
+</script>
+</body>
+</html>
