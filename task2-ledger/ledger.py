@@ -2,7 +2,6 @@
 
 运行:  python ledger.py
 数据:  保存在脚本同目录下的 data.json，重启后自动加载。
-后续:  汇总统计暂未实现。
 """
 
 from __future__ import annotations
@@ -106,6 +105,49 @@ def show_records(records: list[dict]) -> None:
         )
 
 
+def input_month() -> str:
+    """循环询问，直到拿到合法年月（YYYY-MM）；直接回车默认本月。"""
+    while True:
+        raw = input("年月（如 2026-09，直接回车默认本月）: ").strip()
+        if not raw:
+            return datetime.now().strftime("%Y-%m")
+        try:
+            month = datetime.strptime(raw, "%Y-%m")
+        except ValueError:
+            print("  年月格式不对，请按 2026-09 这样的格式输入。")
+            continue
+        return month.strftime("%Y-%m")  # 归一化，比如 2026-9 补成 2026-09
+
+
+def summarize_month(records: list[dict]) -> None:
+    print("--- 月度汇总 ---")
+    month = input_month()
+    matched = [r for r in records if r["time"][:7] == month]
+    if not matched:
+        print(f"{month} 还没有任何账目。")
+        return
+    income = sum(r["amount"] for r in matched if r.get("type") == "income")
+    expense_by_category: dict[str, float] = {}
+    for r in matched:
+        if r.get("type") != "income":
+            expense_by_category[r["category"]] = (
+                expense_by_category.get(r["category"], 0.0) + r["amount"]
+            )
+    total_expense = sum(expense_by_category.values())
+    print(
+        f"【{month}】收入：{income:.2f} 元，"
+        f"支出：{total_expense:.2f} 元，结余：{income - total_expense:.2f} 元"
+    )
+    if total_expense == 0:
+        print("本月没有支出，没有分类占比。")
+        return
+    print("各分类支出占比（按金额从高到低）：")
+    for category, amount in sorted(
+        expense_by_category.items(), key=lambda kv: kv[1], reverse=True
+    ):
+        print(f"  {category}：{amount:.2f} 元（{amount / total_expense * 100:.1f}%）")
+
+
 def main() -> None:
     records = load_records()
     print(f"账本已加载，当前共 {len(records)} 笔。")
@@ -114,17 +156,20 @@ def main() -> None:
         print("==== 记账本 ====")
         print("1 记一笔")
         print("2 查看流水")
-        print("3 退出")
+        print("3 月度汇总")
+        print("4 退出")
         choice = input("请选择: ").strip()
         if choice == "1":
             add_record(records)
         elif choice == "2":
             show_records(records)
         elif choice == "3":
+            summarize_month(records)
+        elif choice == "4":
             print("再见！数据已保存在 data.json。")
             break
         else:
-            print(f"没有这个选项：{choice}，请输入 1、2 或 3。")
+            print(f"没有这个选项：{choice}，请输入 1、2、3 或 4。")
 
 
 if __name__ == "__main__":
