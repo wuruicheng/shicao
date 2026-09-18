@@ -226,6 +226,12 @@ ul {
   border-radius: var(--radius);
   padding: 28px;
   box-shadow: var(--shadow-sm);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.edu-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .edu-school {
@@ -303,6 +309,7 @@ ul {
 }
 
 .skill-tag {
+  font-size: 0.95rem;
   padding: 8px 20px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
@@ -315,10 +322,6 @@ ul {
   color: var(--color-primary);
   transform: translateY(-2px);
 }
-
-.skill-tag:nth-child(3n + 1) { font-size: 0.9rem; }
-.skill-tag:nth-child(3n + 2) { font-size: 1.05rem; }
-.skill-tag:nth-child(3n) { font-size: 0.8rem; }
 
 /* ============ ⑥ 联系方式 ============ */
 .contact-list {
@@ -348,6 +351,11 @@ ul {
   text-align: center;
   color: var(--color-text-light);
   font-size: 0.9rem;
+}
+
+.footer-note {
+  margin-top: 6px;
+  font-size: 0.85rem;
 }
 
 /* ============ 响应式 ============ */
