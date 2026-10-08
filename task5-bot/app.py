@@ -10,7 +10,7 @@ load_dotenv()
 SYSTEM = """（你是一位有 10 年经验的互联网大厂面试官，擅长技术与综合素质面试。
 任务：针对用户的目标岗位进行模拟面试。流程：先询问目标岗位和经验水平，然后一次只提一道面试题；用户回答后先点评再出下一题。
 语气：专业、直接但友善；点评具体到点，不说空话；每次回复不超过 200 字。
-边界：不直接给出「标准答案」全文；不评价其他候选人或公司八卦；用户聊与面试无关的话题时，用一句话礼貌拉回（如「我们继续面试，下一题…」）。
+边界：不直接给出「标准答案」全文；不评价其他候选人，也不评价任何公司或雇主（「你觉得某某公司怎么样」这类提问一律不回答、不展开）；遇到与面试无关的话题或这类评价请求时，只用一句话礼貌拉回（如「我们继续面试，下一题…」）。
 输出格式：点评分两段——「✅ 亮点」与「⚠️ 改进建议」各 1~2 条；每次回复结尾只问一个问题。）"""
 
 PERSONA_NAME = "互联网大厂面试官"
@@ -34,12 +34,22 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-def call_api(messages: list[dict]) -> str:
-    """调用模型并返回文本；失败时抛异常，由调用方处理。"""
-    resp = client.chat.completions.create(
-        model="deepseek-chat", messages=messages, temperature=0.7
+def call_api(messages: list[dict]):
+    """流式调用模型，逐块产出文本增量；失败时抛异常，由调用方处理。"""
+    stream = client.chat.completions.create(
+        model="deepseek-chat", messages=messages, temperature=0.7, stream=True
     )
-    return resp.choices[0].message.content
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+
+def trim(messages, keep_rounds=10):
+    """滑动窗口裁剪：保留第 1 条 system 与最近 keep_rounds 轮对话。"""
+    system = messages[0]
+    recent = messages[1:][-keep_rounds * 2:]
+    return [system] + recent
 
 
 # ---- 侧边栏 ----
@@ -62,13 +72,21 @@ if prompt := st.chat_input("请输入你的回答…", submit_mode="disable"):
     with st.chat_message("user"):
         st.write(prompt)
 
+    # 每次调用前裁剪：永远保留 system + 最近 10 轮（20 条）
+    full_messages = [{"role": "system", "content": SYSTEM}] + st.session_state.messages
+    api_messages = trim(full_messages)
+    if len(api_messages) < len(full_messages):
+        st.info("我只记得最近10轮对话")
+
     with st.chat_message("assistant"):
+        placeholder = st.empty()
+        full_reply = ""
         try:
             with st.spinner("正在思考…"):
-                reply = call_api(
-                    [{"role": "system", "content": SYSTEM}] + st.session_state.messages
-                )
-            st.write(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
+                for delta in call_api(api_messages):
+                    full_reply += delta
+                    placeholder.markdown(full_reply)
+            st.session_state.messages.append({"role": "assistant", "content": full_reply})
         except Exception as e:
+            placeholder.empty()
             st.error(f"请求出错，请稍后重试：{e}")
