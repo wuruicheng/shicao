@@ -2,10 +2,7 @@ import json
 
 import numpy as np
 
-from index import embed_batch as get_embeddings
-
-with open("index.json", encoding="utf-8") as f:
-    chunks = json.load(f)
+from index import get_embeddings
 
 
 def cosine(a, b):
@@ -19,6 +16,9 @@ def search(question, chunks, k=3):
     return scored[:k]
 
 
+with open("data/index_default.json", encoding="utf-8") as f:
+    chunks = json.load(f)
+
 # 打印 Top5：人工判断找到的块是否真的包含答案
-for score, c in search("社团负责人最多可以连任几届？", chunks, k=5):
+for score, c in search("报销的时限是多久？", chunks, k=5):
     print(round(score, 3), c["source"], c["id"], c["text"][:50])
