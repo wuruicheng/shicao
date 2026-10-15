@@ -2,20 +2,28 @@
 
 import streamlit as st
 
-from rag_core import DATA_DIR, build_index, chat, list_knowledge_bases, search
+from rag_core import (
+    DATA_DIR,
+    build_index,
+    chat,
+    list_knowledge_bases,
+    load_uploaded_documents,
+    search,
+)
 
 st.set_page_config(page_title="RAG 知识库问答", page_icon="📚")
 
 
 def save_uploads(uploaded_files):
-    """把上传文件落到共享临时目录，返回该目录。"""
+    """读取上传文件（BytesIO）并落到临时目录，返回 (目录, 解码失败文件名列表)。"""
+    docs, failed = load_uploaded_documents(uploaded_files)
     d = DATA_DIR / "_uploads"
     d.mkdir(parents=True, exist_ok=True)
     for old in d.iterdir():
         old.unlink()
-    for uf in uploaded_files:
-        (d / uf.name).write_bytes(uf.getvalue())
-    return d
+    for name, text in docs:
+        (d / name).write_text(text, encoding="utf-8")
+    return d, failed
 
 
 def render_sources(sources):
@@ -43,7 +51,9 @@ if st.sidebar.button("一键建库", type="primary"):
     elif not kb_name.strip():
         st.sidebar.warning("请填写知识库名称")
     else:
-        docs_dir = save_uploads(uploaded)
+        docs_dir, failed = save_uploads(uploaded)
+        if failed:
+            st.sidebar.warning("以下文件读取失败已跳过：" + "、".join(failed))
         bar = st.sidebar.progress(0.0, text="准备切块…")
 
         def cb(done, total):

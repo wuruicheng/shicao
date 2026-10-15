@@ -40,7 +40,7 @@ SYSTEM_PROMPT = (
 
 def get_embeddings(texts):
     """调用 Embedding API 生成向量，返回与输入等长的向量列表（单批不超过 BATCH_SIZE）。"""
-    url = EMBEDDING_BASE_URL.rstrip("/") + "/embeddings"
+    url = (EMBEDDING_BASE_URL or "").rstrip("/") + "/embeddings"
     headers = {
         "Authorization": f"Bearer {EMBEDDING_API_KEY}",
         "Content-Type": "application/json",
@@ -64,19 +64,63 @@ def chunk_text(text, size=SIZE, overlap=OVERLAP):
     return [text[i:i + size] for i in range(0, len(text), step) if text[i:i + size].strip()]
 
 
+def read_file_text(file):
+    """读取单个文件文本，兼容本地磁盘路径与 Streamlit 上传的文件对象（BytesIO）。
+
+    - 文件对象：先读二进制 raw，raw 为 None 返回 ""；utf-8 解码失败返回 ""；
+    - 本地路径：按 utf-8 读取磁盘文件，读取/解码失败返回 ""；
+    - 返回前统一空值兜底（text or ""），保证返回字符串类型。
+    """
+    text = None
+    try:
+        if hasattr(file, "read"):  # BytesIO / Streamlit UploadedFile
+            raw = file.getvalue() if hasattr(file, "getvalue") else file.read()
+            if raw is None:
+                return ""
+            if isinstance(raw, bytes):
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    return ""
+            else:
+                text = str(raw)
+        else:  # 本地磁盘路径（str / Path）
+            try:
+                text = Path(file).read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                return ""
+    except Exception:
+        return ""
+    return text or ""
+
+
 def load_documents(docs_dir):
     """遍历目录读取全部 .txt/.md（UTF-8），返回 [(文件名, 文本), ...]。"""
     docs = []
     for path in sorted(Path(docs_dir).iterdir()):
         if path.suffix.lower() not in (".txt", ".md"):
             continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
+        text = read_file_text(path)
         if text.strip():
             docs.append((path.name, text))
     return docs
+
+
+def load_uploaded_documents(uploaded_files):
+    """读取 Streamlit 上传的文件对象列表，返回 (docs, failed)。
+
+    docs: [(文件名, 文本), ...]；failed: 解码/读取失败的文件名列表。
+    """
+    docs = []
+    failed = []
+    for uf in uploaded_files:
+        name = getattr(uf, "name", "upload.txt")
+        text = read_file_text(uf)
+        if text.strip():
+            docs.append((name, text))
+        else:
+            failed.append(name)
+    return docs, failed
 
 
 # ---- 知识库文件管理 ----
@@ -174,7 +218,7 @@ def build_prompt(question, top):
 
 def chat(question, top, stream=False):
     """调用对话模型生成回答。stream=True 时返回逐段字符串生成器。"""
-    url = DEEPSEEK_BASE_URL.rstrip("/") + "/chat/completions"
+    url = (DEEPSEEK_BASE_URL or "").rstrip("/") + "/chat/completions"
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         "Content-Type": "application/json",
